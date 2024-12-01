@@ -7,22 +7,29 @@ import (
 
     "strings"
     "strconv"
-    "sort"
+    // "sort"
 )
 
-func collectLists(scanner *bufio.Scanner) (l, r []int) {
+func collectNumbers(scanner *bufio.Scanner) (l []int, r map[int]int) {
     
     l = []int{}
-    r = []int{}
+    r = make(map[int]int)
     for scanner.Scan() {
         line := scanner.Text()
         nums := strings.Split(line, "   ")
         lN, _ := strconv.Atoi(nums[0])
         rN, _ := strconv.Atoi(nums[1])
         l = append(l, lN)
-        r = append(r, rN)
+        r[rN] += 1
     }
 
+    return
+}
+
+func calcSimilarity(nums []int, counts map[int]int) (score int) {
+    for _, v := range nums {
+        score += v * counts[v]
+    }
     return
 }
 
@@ -36,22 +43,11 @@ func main() {
     file, scanner := createFileScanner(filename)
 	defer file.Close()
 
-    l, r := collectLists(scanner)
-    // fmt.Printf("list l = %v\n", l)
-    // fmt.Printf("list r = %v\n", r)
-	sort.Ints(l)
-	sort.Ints(r)
+    l, r := collectNumbers(scanner)
 	
-	totalDiffs := 0
-	for i, v := range l {
-        diff := v - r[i]
-        if diff < 0 {
-            diff = -diff
-        }
-        totalDiffs += diff
-	}
+    answer := calcSimilarity(l, r)
 
-    fmt.Printf("answer: %v\n", totalDiffs)
+    fmt.Printf("answer: %v\n", answer)
 
 }
 
