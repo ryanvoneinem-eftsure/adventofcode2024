@@ -23,6 +23,27 @@ func collectReports(scanner *bufio.Scanner) (reports [][]int) {
     return
 }
 
+func reportIsSafeEnough(report []int) (safe bool) {
+    if reportIsSafe(report) {
+        return true
+    }
+
+    // confusing append behaviour within loop, copy report
+    reportCopy := make([]int, len(report)) 
+    _ = copy(reportCopy, report)
+
+    for i, _ := range report {
+        tempReport := append(reportCopy[:i], reportCopy[i+1:]...)
+        if reportIsSafe(tempReport) {
+            return true
+        }
+
+        _ = copy(reportCopy, report)
+    }
+
+    return false
+}
+
 func reportIsSafe(report []int) (safe bool) {
     increase := 0
     decrease := 0
@@ -54,7 +75,7 @@ func reportIsSafe(report []int) (safe bool) {
 
 func safetyScore(reports [][]int) (score int) {
     for _, sl := range reports {
-        if reportIsSafe(sl) {
+        if reportIsSafeEnough(sl) {
             score++
         }
     }
