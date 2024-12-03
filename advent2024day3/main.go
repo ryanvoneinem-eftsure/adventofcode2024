@@ -16,6 +16,10 @@ func main() {
     file, scanner := createFileScanner(filename)
 	defer file.Close()
 
+    for scanner.Scan() {
+        fmt.Println(scanner.Text())
+    }
+
 }
 
 func createFileScanner(filename string) (file *os.File, scanner *bufio.Scanner) {
