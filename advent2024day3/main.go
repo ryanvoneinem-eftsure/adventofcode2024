@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"errors"
-	"unicode/utf8"
+	// "unicode/utf8"
     "strconv"
 )
 
@@ -18,7 +18,7 @@ type Function struct {
 
 type FunctionInstance struct {
 	function Function
-	params   []Param
+	params   []*Param
 }
 
 type Param struct {
@@ -38,98 +38,93 @@ func (fI *FunctionInstance) ToString() string {
     return str + ")"
 }
 
-func compareRuneWithString(r rune, s string, i int) bool {
+type TokeState int
 
-	check, _ := utf8.DecodeRuneInString(s[i:])
-	return r == check
+const (
+    OPEN_PAREN TokeState = iota
+    LESS_PARAMS
+    FINAL_PARAM
+    CLOSE_PAREN
+)
+
+func getAllowedChars(st TokeState) string {
+    switch st {
+    case OPEN_PAREN:
+        return "("
+    case LESS_PARAMS:
+        return "1234567890,"
+    case FINAL_PARAM:
+        return "1234567890)"
+    case CLOSE_PAREN:
+        return ")"
+    default:
+        return ""
+    }
 
 }
 
 func findParamsFollowingFunctionCall(reader *bufio.Reader, funcDef Function) (*FunctionInstance, error) {
-	allowedChars := "(),1234567890"
-	paramChars := "1234567890"
-	params := []Param{}
-
-    for i, c := range paramChars {
-        fmt.Printf("allowed chars: %v | %v", i, c)
-    }
+	params := []*Param{}
+    currentParam := new(Param)
+    currentParam.typeStr = "int"
+    state := OPEN_PAREN
 
 	runeVal, _, readErr := reader.ReadRune()
-    if readErr != nil {
-        return nil, readErr
-    }
+    for readErr == nil {
+        fmt.Println(currentParam)
+        allowed := getAllowedChars(state)
+        fmt.Println(allowed)
+        fmt.Printf("evaluating %#U\n", runeVal)
+        malformed := true
+        for _, v := range allowed {
+            if runeVal == rune(v) {
+                malformed = false
+            }
+        }
 
-	if !compareRuneWithString(runeVal, allowedChars, 0) {
-		return nil, errors.New("malformed")
-	}
+        if malformed {
+            return nil, errors.New("malformed")
+        }
 
-	runeVal, _, readErr = reader.ReadRune()
-    if readErr != nil {
-        return nil, readErr
-    }
+        fmt.Println("entering switch")
 
-	currentParam := Param{"int", ""}
-
-	for readErr == nil {
-		fmt.Println(runeVal)
-
-		if compareRuneWithString(runeVal, allowedChars, 1) {
-            fmt.Println(") found")
-            if len(currentParam.intVal) == 0 || len(params) < funcDef.paramCount-1 {
-				return nil, errors.New("malformed")
+        switch state {
+        case OPEN_PAREN:
+            fmt.Println("( found")
+            if funcDef.paramCount > 0 {
+                state = LESS_PARAMS
+            } else {
+                state = CLOSE_PAREN
             }
 
-            params = append(params, currentParam)
+        case LESS_PARAMS, FINAL_PARAM:
 
+            if state == FINAL_PARAM && runeVal == rune(")"[0]) {
+                funcCall := FunctionInstance{function: funcDef, params: params}
+                return &funcCall, nil
+            }
+
+            if currentParam.intVal == "" && runeVal == rune(","[0]) {
+                fmt.Println("unexpected ,")
+                return nil, errors.New("malformed")
+            } else if runeVal == rune(","[0]) {
+                fmt.Println(", found")
+                if len(params) == funcDef.paramCount - 1 {
+                    state = FINAL_PARAM
+                }
+                currentParam = new(Param)
+                currentParam.typeStr = "int"
+            } else if currentParam.intVal == "" {
+                currentParam.intVal += string(runeVal)
+                params = append(params, currentParam)
+            } else {
+                currentParam.intVal += string(runeVal)
+            }
+
+        case CLOSE_PAREN:
             funcCall := FunctionInstance{function: funcDef, params: params}
 			return &funcCall, nil
-		}
-
-		if compareRuneWithString(runeVal, allowedChars, 2) {
-            fmt.Println(", found")
-			if len(currentParam.intVal) > 0 {
-				params = append(params, currentParam)
-                fmt.Printf("len:%v\n", len(params))
-                fmt.Printf("max:%v\n", funcDef.paramCount)
-				if len(params) > funcDef.paramCount {
-					return nil, errors.New("malformed")
-				}
-				currentParam = Param{"int", ""}
-
-                runeVal, _, readErr = reader.ReadRune()
-                continue
-			} else {
-                return nil, errors.New("malformed")
-            }
-		}
-
-		found := false
-		for i, c := range paramChars {
-			if runeVal == rune(c) {
-				found = true
-                fmt.Printf("%v == %v\n", runeVal, c)
-				currentParam.intVal += paramChars[i : i+1]
-			}
-		}
-		
-        if !found && compareRuneWithString(runeVal, allowedChars, 2) {
-            fmt.Println(", found")
-			if len(currentParam.intVal) > 0 {
-				params = append(params, currentParam)
-                fmt.Printf("len:%v\n", len(params))
-                fmt.Printf("max:%v\n", funcDef.paramCount)
-				if len(params) > funcDef.paramCount {
-					return nil, errors.New("malformed")
-				}
-				currentParam = Param{"int", ""}
-
-			} else {
-                return nil, errors.New("malformed")
-            }
-		} else if !found {
-            fmt.Println("something weird found")
-			return nil, errors.New("malformed")
-		}
+        }
 
 		runeVal, _, readErr = reader.ReadRune()
 	}
@@ -148,7 +143,7 @@ func findNextFunctionCall(reader *bufio.Reader, funcDef Function) (*FunctionInst
 
 	for readErr == nil {
 		fmt.Println(runeVal)
-		if compareRuneWithString(runeVal, funcDef.keyword, functionCharsFound) {
+		if runeVal == rune(funcDef.keyword[functionCharsFound]) {
 			fmt.Printf("%#U found\n", runeVal)
 			functionCharsFound++
 			if functionCharsFound == functionNameLen {
