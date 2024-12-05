@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"errors"
-	// "unicode/utf8"
+    "strings"
     "strconv"
 )
 
@@ -83,7 +83,11 @@ func findParamsFollowingFunctionCall(reader *bufio.Reader, funcDef Function) (*F
         }
 
         if malformed {
-            return nil, errors.New("malformed")
+            errMsg := "malformed"
+            if state == OPEN_PAREN {
+                errMsg += " expecting ("
+            }
+            return nil, errors.New(errMsg)
         }
 
         fmt.Println("entering switch")
@@ -132,26 +136,36 @@ func findParamsFollowingFunctionCall(reader *bufio.Reader, funcDef Function) (*F
     return nil, readErr
 }
 
-func findNextFunctionCall(reader *bufio.Reader, funcDef Function) (*FunctionInstance, error) {
+func findNextFunctionCall(reader *bufio.Reader, candidates []Function) (*FunctionInstance, error) {
 	runeVal, _, readErr := reader.ReadRune()
     if readErr != nil {
         return nil, readErr
     }
 
-	functionNameLen := len(funcDef.keyword)
-	functionCharsFound := 0
+    candCharsFound := make([]int, len(candidates))
 
 	for readErr == nil {
-		fmt.Println(runeVal)
-		if runeVal == rune(funcDef.keyword[functionCharsFound]) {
-			fmt.Printf("%#U found\n", runeVal)
-			functionCharsFound++
-			if functionCharsFound == functionNameLen {
-				fmt.Println("'mul' found")
-				functionCharsFound = 0
-				return findParamsFollowingFunctionCall(reader, funcDef)
-			}
-		}
+        inner:
+        for i, candidate := range candidates {
+            if runeVal == rune(candidate.keyword[candCharsFound[i]]) {
+                fmt.Printf("%#U found\n", runeVal)
+                candCharsFound[i]++
+                if len(candidate.keyword) == candCharsFound[i] {
+                    fmt.Printf("'%v' found\n", candidate.keyword)
+                    fi, err := findParamsFollowingFunctionCall(reader, candidate)
+                    if err != nil && strings.Contains(err.Error(), "(") {
+                        fmt.Println("do no (")
+                        candCharsFound[i] = 0
+                        reader.UnreadRune()
+                        continue inner
+                    } else {
+                        return fi, err
+                    }
+                }
+            } else {
+                candCharsFound[i] = 0
+            }
+        }
 
 		runeVal, _, readErr = reader.ReadRune()
 	}
@@ -183,19 +197,22 @@ func main() {
 	defer file.Close()
 
 	mulFunc := Function{"mul", 2, []string{"int", "int"}}
+    doFunc := Function{"do", 0, []string{}}
+    dontFunc := Function{"don't", 0, []string{}}
+    candidates := []Function{mulFunc,doFunc,dontFunc}
 
     callables := []*FunctionInstance{}
-    call, err := findNextFunctionCall(reader, mulFunc)
+    call, err := findNextFunctionCall(reader, candidates)
     if err == nil {
         callables = append(callables, call)
     }
 
     for err == nil {
-        call, err = findNextFunctionCall(reader, mulFunc)
+        call, err = findNextFunctionCall(reader, candidates)
         if call != nil {
             fmt.Printf("created %v\n", call.ToString())
         }
-        if err != nil && err.Error() == "malformed" {
+        if err != nil && strings.Contains(err.Error(), "malformed") {
             err = nil
             err = reader.UnreadRune()
         } else if err == nil {
@@ -204,17 +221,22 @@ func main() {
         }
     }
 
-    if err != nil && err.Error() != "EOF" && err.Error() != "malformed" {
+    if err != nil && err.Error() != "EOF" && !strings.Contains(err.Error(), "malformed") {
         check(err)
     } else if err != nil {
         fmt.Printf("success: %v\n", err)
     }
 
     finalAnswer := 0
+    do := true
     fmt.Printf("callables: %v\n", len(callables))
     for _, callable := range callables {
         fmt.Println(callable.ToString())
-        finalAnswer += mulDefinition(callable)
+        if callable.function.keyword == "mul" && do {
+            finalAnswer += mulDefinition(callable)
+        } else {
+            do = callable.function.keyword == "do"
+        }
     }
 
     fmt.Printf("final answer: %v\n", finalAnswer)
