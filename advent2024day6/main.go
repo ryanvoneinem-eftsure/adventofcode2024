@@ -4,6 +4,7 @@ import (
     "os"
     "fmt"
     "bufio"
+    "strconv"
 )
 
 type Player struct {
@@ -15,6 +16,53 @@ type Player struct {
 type Vec2 struct {
     X int
     Y int
+}
+
+func (v Vec2) Equals(w Vec2) bool {
+    return v.X == w.X && v.Y == w.Y
+}
+
+func (v Vec2) ToString() string {
+    return strconv.Itoa(v.X) + "," + strconv.Itoa(v.Y)
+}
+
+type Node struct {
+    Value Vec2
+    Prev *Node
+    Next *Node
+}
+
+type LinkedList struct {
+    Slice []*Node
+}
+
+func newLinkedList() *LinkedList {
+    return &LinkedList{[]*Node{}}
+}
+
+func (l *LinkedList) getLatestNode(v Vec2) *Node {
+    for i := len(l.Slice)-1; i >= 0; i--{
+        if l.Slice[i].Value.Equals(v) {
+            return l.Slice[i]
+        }
+    }
+
+    return nil
+}
+
+func (l *LinkedList) addNode(v Vec2) *Node {
+    var prev *Node
+    if len(l.Slice) > 0 {
+        prev = l.Slice[len(l.Slice)-1]
+    }
+    n := Node{
+        Value:v,
+        Prev:prev,
+        Next:nil,
+    }
+
+    l.Slice = append(l.Slice, &n)
+    return &n
 }
 
 func getPlayer(game [][]rune) (player Player) {
@@ -217,6 +265,61 @@ func main() {
 
     fmt.Println(player)
 
+    // solveForPart1(player, game)
+
+    possibilities := solveForPart2(filename, player, game)
+    fmt.Println(possibilities)
+
+}
+
+func solveForPart2(filename string, player Player, game [][]rune) int {
+    loopPossibilities := 0
+
+    possibleLocations := scanForCoords([]rune{'.'}, game)
+    for _, pL := range possibleLocations {
+        game[pL.Y][pL.X] = '#'
+        obstacles := newLinkedList()
+        prevObs := Vec2{-1,-1}
+        player, obs := findNextObstruction(player, &game)
+        for obs.X != -1 {
+
+            secondVisit := obstacles.getLatestNode(obs)
+            if secondVisit != nil && secondVisit.Prev != nil &&
+                prevObs.X != -1 && secondVisit.Prev.Value.Equals(prevObs) {
+                    loopPossibilities++
+                    obs = Vec2{-1,-1}
+                    fmt.Println("infinite loop found [", loopPossibilities, "]")
+            } else {
+                obstacles.addNode(obs)
+                prevObs = obs
+                player, obs = findNextObstruction(player, &game)
+            }
+
+        }
+
+        file, scanner := createFileScanner(filename)
+        defer file.Close()
+        game = loadGameBoard(scanner)
+    }
+
+    return loopPossibilities
+}
+
+func findNextObstruction(player Player, game *[][]rune) (Player, Vec2) {
+
+    obstruction := searchPath(player.Loc, player.Dir, *game)
+
+    if obstruction.X != -1 {
+        player = walkPlayer(game, player, obstruction)
+        return player, obstruction
+    }
+
+    return player, Vec2{-1,-1}
+
+}
+
+func solveForPart1(player Player, game [][]rune) int {
+
     uniqueLocations := 0
 
     for player.Loc.X != -1 {
@@ -249,6 +352,7 @@ func main() {
 
     uniqueLocations += len(scanForCoords([]rune{'X'}, game))
     fmt.Println(uniqueLocations)
+    return uniqueLocations
 
 }
 
@@ -256,7 +360,7 @@ func loadGameBoard(scanner *bufio.Scanner) (game [][]rune) {
 
     for scanner.Scan() {
         line := scanner.Text()
-        fmt.Println(line)
+        // fmt.Println(line)
         lineSl := make([]rune, len(line))
         for i, c := range line {
             lineSl[i] = rune(c)
@@ -264,7 +368,7 @@ func loadGameBoard(scanner *bufio.Scanner) (game [][]rune) {
         game = append(game, lineSl)
     }
 
-    fmt.Printf("%vx%v\n", len(game[0]), len(game))
+    // fmt.Printf("%vx%v\n", len(game[0]), len(game))
     return
 
 }
@@ -274,7 +378,7 @@ func createFileScanner(filename string) (file *os.File, scanner *bufio.Scanner) 
     file, fileErr := os.Open(filename)
     check(fileErr)
 
-    fmt.Println("file opened")
+    // fmt.Println("file opened")
 
     scanner = bufio.NewScanner(file)
     return
