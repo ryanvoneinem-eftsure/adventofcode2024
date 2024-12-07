@@ -121,7 +121,7 @@ func searchPath(loc, dir Vec2, game [][]rune) Vec2 {
     if dir.X == 0 {
 
         obstructions := scanColForCoords([]rune{'#'}, game, loc.X)
-        seeker := Vec2{loc.X, loc.Y}
+        seeker := Vec2{Y:loc.Y}
         for seeker.Y >= 0 && seeker.Y < len(game) {
             for _, obs := range obstructions {
                 if obs.Y == seeker.Y {
@@ -134,7 +134,7 @@ func searchPath(loc, dir Vec2, game [][]rune) Vec2 {
     } else {
 
         obstructions := scanRowForCoords([]rune{'#'}, game, loc.Y)
-        seeker := Vec2{loc.X, loc.Y}
+        seeker := Vec2{X:loc.X}
         for seeker.X >= 0 && seeker.X < len(game) {
             for _, obs := range obstructions {
                 if obs.X == seeker.X {
