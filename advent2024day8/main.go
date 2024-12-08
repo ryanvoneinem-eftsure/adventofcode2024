@@ -81,6 +81,26 @@ func findAntinodesInBoundsPart1(locations []Vec2, width int) []Vec2 {
     return antinodes
 }
 
+func findAntinodesInBoundsPart2(locations []Vec2, width int) []Vec2 {
+    antinodes := locations
+    for i := 0; i < len(locations)-1; i++ {
+        for j := i+1; j < len(locations); j++ {
+            step := locations[i].StepTo(locations[j])
+            pAnti1 := locations[j].Add(step)
+            for pAnti1.WithinBounds(width) {
+                antinodes = append(antinodes, pAnti1)
+                pAnti1 = pAnti1.Add(step)
+            } 
+            pAnti2 := locations[i].Add(step.Reverse())
+            for pAnti2.WithinBounds(width) {
+                antinodes = append(antinodes, pAnti2)
+                pAnti2 = pAnti2.Add(step.Reverse())
+            } 
+        }
+    }
+    return antinodes
+}
+
 func createAntinodeMap(width int, locations []Vec2) [][]rune {
 
     game := make([][]rune, width)
@@ -116,7 +136,7 @@ func main() {
 
     antinodes := []Vec2{}
     for _, lSl := range locations {
-        antinodes = slices.Concat(antinodes, findAntinodesInBoundsPart1(lSl, len(game)))
+        antinodes = slices.Concat(antinodes, findAntinodesInBoundsPart2(lSl, len(game)))
     }
 
     // fmt.Println(antinodes)
