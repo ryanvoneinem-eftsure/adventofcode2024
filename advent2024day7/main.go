@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"math"
+	"slices"
+
 	// "math/rand"
 	"os"
 	"strconv"
@@ -32,7 +34,10 @@ func main() {
     ch := make(chan int, 850)
 
     // Part1
-    operators := []rune{'+','*'}
+    // operators := []rune{'+','*'}
+
+    // Part2
+    operators := []string{"+","*","||"}
 
     for _, p := range problems {
         fmt.Println(p)
@@ -55,31 +60,52 @@ func main() {
 
 }
 
-func solve(problem Problem, operators []rune, ch chan int) {
+func solve(problem Problem, operators []string, ch chan int) {
     defer wg.Done()
 
     // id := rand.Int()
 
     var i int64
-    for i = 0; i < int64(math.Pow(float64(len(operators)), float64(len(problem.Vars)))); i++ {
+    for i = 0; i < int64(math.Pow(float64(len(operators)), float64(len(problem.Vars)-1))); i++ {
         places := strconv.FormatInt(i, len(operators))
-        operands := []rune{}
+        operands := []string{}
         if len(places) < len(problem.Vars)-1 {
             places = strings.Repeat("0", len(problem.Vars)-1-len(places)) + places
         }
+        // fmt.Println(problem.Vars, places)
         for _, p := range places {
             pInt, _ := strconv.Atoi(string(p))
             operands = append(operands, operators[pInt])
         }
+
         // fmt.Println(id, "variables:",problem.Vars)
-        // fmt.Println(id, "operands:",string(operands))
-        answer := problem.Vars[0]
-        for j := 1; j < len(problem.Vars); j++ {
+        // fmt.Println(id, "operands:",operands)
+
+        variables := slices.Clone(problem.Vars)
+        // fmt.Println(id, "variables:", variables)
+
+        answer := variables[0]
+        for j := 1; j < len(variables); j++ {
             switch operands[j-1] {
-            case '+':
-                answer += problem.Vars[j]
-            case '*':
-                answer *= problem.Vars[j]
+            case "+":
+                answer += variables[j]
+            case "*":
+                answer *= variables[j]
+            case "||":
+                // fmt.Println(id, "combining", variables)
+                newVar, _ := strconv.Atoi(strconv.Itoa(answer) + strconv.Itoa(variables[j]))
+                if len(variables) == 2 {
+                    variables = []int{newVar}
+                    operands = []string{}
+                    answer = variables[0]
+                } else {
+                    variables = slices.Delete(variables, j-1, j+1)
+                    variables = slices.Insert(variables, j-1, newVar)
+                    operands = slices.Delete(operands, j-1, j)
+                    answer = variables[j-1]
+                    j--
+                }
+                // fmt.Println(id, "combined", variables)
             }
         }
         if answer == problem.Answer {
