@@ -8,6 +8,10 @@ import (
 	"strconv"
 )
 
+type EmptyFile struct {
+    Blocks []Block
+}
+
 type File struct {
     Id int
     Blocks []Block
@@ -41,11 +45,20 @@ func main() {
     file, scanner := createFileScanner(filename)
 	defer file.Close()
 
-    files, width := readDiskMap(scanner)
+    files, emptyFiles, width := readDiskMap(scanner)
     // fmt.Println(files, width)
+
+    // Part 1
+    // diskMap := uncompressedDiskMap(files, width)
+    // fmt.Println(diskMap.ToString())
+    // diskMap = readressRToL(diskMap)
+    // fmt.Println(diskMap.ToString())
+
+    // Part 2
     diskMap := uncompressedDiskMap(files, width)
     // fmt.Println(diskMap.ToString())
-    diskMap = readressRToL(diskMap)
+    files, emptyFiles = readressContiguous(files, emptyFiles)
+    diskMap = uncompressedDiskMap(files, width)
     // fmt.Println(diskMap.ToString())
 
     fmt.Println("sum: ", checksum(diskMap))
@@ -58,6 +71,41 @@ func checksum(diskMap DiskMap) int {
         sum += aInt * i
     }
     return sum
+}
+
+func readressContiguous(files []File, emptyFiles []EmptyFile) ([]File, []EmptyFile) {
+    // fmt.Println("files", files)
+    // fmt.Println("emptyFiles", emptyFiles)
+
+    for i := len(files)-1; i >= 0; i-- {
+
+        f := files[i]
+        w := len(f.Blocks)
+        for j := 0; j < len(emptyFiles); j++ {
+
+            ef := emptyFiles[j]
+
+            if len(ef.Blocks) < w {
+                continue
+            }
+            if ef.Blocks[0].Id > f.Blocks[0].Id {
+                break
+            }
+
+            for k := 0; k < len(f.Blocks); k++ {
+                f.Blocks[k].Id = ef.Blocks[k].Id
+            }
+            
+            emptyFiles[j].Blocks = slices.Delete(ef.Blocks, 0, w)
+        }
+        
+    }
+
+    // fmt.Println("files", files)
+    // fmt.Println("emptyFiles", emptyFiles)
+
+    return files, emptyFiles
+
 }
 
 func readressRToL(diskMap DiskMap) DiskMap {
@@ -95,9 +143,11 @@ func uncompressedDiskMap(files []File, width int) DiskMap {
     return diskMap
 }
 
-func readDiskMap(scanner *bufio.Scanner) ([]File, int) {
+func readDiskMap(scanner *bufio.Scanner) ([]File, []EmptyFile, int) {
     
     files := []File{}
+    emptyFiles := []EmptyFile{}
+
     fileCount := 0
     blockCount := 0
     readingFile := true
@@ -117,13 +167,20 @@ func readDiskMap(scanner *bufio.Scanner) ([]File, int) {
                 files = append(files, f)
                 readingFile = false
             } else {
-                blockCount += w
+                if w > 0 {
+                    ef := EmptyFile{Blocks:make([]Block,w)}
+                    for i := 0; i < len(ef.Blocks); i++ {
+                        ef.Blocks[i].Id = blockCount
+                        blockCount++
+                    }
+                    emptyFiles = append(emptyFiles, ef)
+                }
                 readingFile = true
             }
         }
     }
 
-    return files, blockCount
+    return files, emptyFiles, blockCount
 
 }
 
