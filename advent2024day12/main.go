@@ -13,12 +13,147 @@ type Vec2 struct {
     Y int
 }
 
+type Dir struct {
+    T Vec2
+    B Vec2
+    L Vec2
+    R Vec2
+    TL Vec2
+    TR Vec2
+    BL Vec2
+    BR Vec2
+}
+
+func dir() Dir {
+    return Dir{
+        Vec2{0,-1},
+        Vec2{0,1},
+        Vec2{-1,0},
+        Vec2{1,0},
+        Vec2{-1,-1},
+        Vec2{1,-1},
+        Vec2{-1,1},
+        Vec2{1,1},
+    }
+}
+
 type Region struct {
     Plants []Plant
 }
 
 func (r Region) Area() int {
     return len(r.Plants)
+}
+
+func (r Region) Sides(game [][]rune) int {
+    return r.Corners(game)
+}
+
+func (r Region) Corners(game [][]rune) int {
+    if len(r.Plants) == 0 {
+        return 0
+    }
+    if len(r.Plants) <= 2 {
+        return 4
+    }
+
+    w := len(game)
+    sides := 0
+
+    for _, p := range r.Plants {
+
+        if len(p.Neighbours) == 1 {
+            // fmt.Println(p.Pos,"peninsula")
+            sides += 2
+            continue
+        }
+        if len(p.Neighbours) == 2 {
+            if !p.Pos.Linear(p.Neighbours[0].Pos,p.Neighbours[1].Pos) {
+
+                // fmt.Println(p.Pos,"corner")
+                sides += 1
+                // check possible interior corner
+                check := p.Pos.StepTo(p.Neighbours[0].Pos).Add(p.Pos.StepTo(p.Neighbours[1].Pos))
+                if getRuneAt(game, p.Pos.Add(check)) != p.Type {
+                    // fmt.Println(p.Pos,"interiorcorner")
+                    sides += 1
+                }
+            }
+            continue
+        }
+        if len(p.Neighbours) == 3 {
+            var nonLinear Plant
+            linear := []Plant{}
+            if p.Pos.Linear(p.Neighbours[0].Pos,p.Neighbours[1].Pos) {
+                nonLinear = p.Neighbours[2]
+                linear = []Plant{p.Neighbours[0],p.Neighbours[1]}
+            } else if p.Pos.Linear(p.Neighbours[1].Pos,p.Neighbours[2].Pos) {
+                nonLinear = p.Neighbours[0]
+                linear = []Plant{p.Neighbours[1],p.Neighbours[2]}
+            } else {
+                nonLinear = p.Neighbours[1]
+                linear = []Plant{p.Neighbours[0],p.Neighbours[2]}
+            }
+            checks := []Vec2{
+                p.Pos.StepTo(linear[0].Pos).Add(p.Pos.StepTo(nonLinear.Pos)),
+                p.Pos.StepTo(linear[1].Pos).Add(p.Pos.StepTo(nonLinear.Pos)),
+            }
+            for _, check := range checks {
+                // fmt.Println(p.Pos,"checking",p.Pos.Add(check))
+                if p.Pos.Add(check).WithinBounds(w) && getRuneAt(game, p.Pos.Add(check)) != p.Type {
+                    // fmt.Println(string(getRuneAt(game, p.Pos.Add(check))),p.Pos.Add(check),"corner")
+                    sides += 1
+                }
+            }
+            continue
+        }
+        
+        dirs := dir()
+        checks := []Vec2{
+            dirs.TL,
+            dirs.TR,
+            dirs.BL,
+            dirs.BR,
+        }
+        for _, check := range checks {
+            if p.Pos.Add(check).WithinBounds(w) && getRuneAt(game, p.Pos.Add(check)) != p.Type {
+                // fmt.Println(string(getRuneAt(game, p.Pos.Add(check))),p.Pos.Add(check),"corner")
+                sides += 1
+            }
+        }
+    }
+
+    return sides
+}
+
+type Bounds struct {
+    Top int
+    Bot int
+    Lef int
+    Rig int
+}
+
+func (r Region) Bounds() Bounds {
+
+    var top, bot, lef, rig int
+    top = 999999
+    lef = 999999
+
+    for _,pl := range r.Plants {
+        if pl.Pos.Y < top {
+            top = pl.Pos.Y
+        }
+        if pl.Pos.Y > bot {
+            bot = pl.Pos.Y
+        }
+        if pl.Pos.X < lef {
+            lef = pl.Pos.X
+        }
+        if pl.Pos.X > rig {
+            rig = pl.Pos.X
+        }
+    }
+    return Bounds{top, bot, lef, rig}
 }
 
 func (r Region) Perimeter() int {
@@ -64,6 +199,10 @@ func (v Vec2) WithinBounds(width int) bool {
     return v.X >= 0 && v.X < width && v.Y >= 0 && v.Y < width
 }
 
+func (v Vec2) Linear(w1 Vec2, w2 Vec2) bool {
+    return (v.X == w1.X && w1.X == w2.X) || (v.Y == w1.Y && w1.Y == w2.Y)
+}
+
 func getRuneAt(game [][]rune, coord Vec2) rune {
     return game[coord.Y][coord.X]
 }
@@ -71,6 +210,22 @@ func getRuneAt(game [][]rune, coord Vec2) rune {
 func setRuneAt(game [][]rune, coord Vec2, r rune) [][]rune {
     game[coord.Y][coord.X] = r
     return game
+}
+
+func scanForCoordsWithinBounds(searchChars []rune, game [][]rune, bounds Bounds) (locations [][]Vec2) {
+
+    locations = make([][]Vec2, len(searchChars))
+    for x := bounds.Lef; x <= bounds.Rig; x++ {
+        for y := bounds.Top; y <= bounds.Bot; y++ {
+            for i, c := range searchChars {
+                if c == game[y][x] {
+                    locations[i] = append(locations[i], Vec2{x, y})
+                }
+            }
+        }
+    }
+    return
+
 }
 
 func scanForCoords(searchChars []rune, game [][]rune) (locations [][]Vec2) {
@@ -108,7 +263,7 @@ func findNextRegion(game [][]rune) Region {
             }
 
             if valid {
-                region = Region{[]Plant{{Type:r, Pos:Vec2{x,y}}}}
+                region = Region{[]Plant{{Type:r, Pos:Vec2{x,y},Neighbours: []Plant{}}}}
                 break outer
             }
         }
@@ -124,26 +279,26 @@ func findNextRegion(game [][]rune) Region {
             {-1,0},
         }
         for _,d := range directions {
-            exists := false
             var neighbour Plant
             pnPos := p.Pos.Add(d)
             if pnPos.WithinBounds(w) {
                 pnType := getRuneAt(game,pnPos)
                 if pnType == p.Type {
-                    neighbour = Plant{Type:pnType,Pos:pnPos,Neighbours:[]Plant{p}}
+                    neighbour = Plant{Type:pnType,Pos:pnPos,Neighbours:[]Plant{}}
+                    neighbour.Neighbours = append(neighbour.Neighbours, p)
                     exists := false
-                    for _,n := range p.Neighbours {
-                        if n.Pos.Equals(neighbour.Pos) {
+                    for _,ns := range p.Neighbours {
+                        if ns.Pos.Equals(neighbour.Pos) {
                             exists = true
                         }
                     }
                     if !exists {
                         p.Neighbours = append(p.Neighbours, neighbour)
-                        region.Plants[i] = p
                     }
                 }
-                for _,p := range region.Plants {
-                    if p.Pos.Equals(neighbour.Pos) {
+                exists := false
+                for _,ep := range region.Plants {
+                    if ep.Pos.Equals(neighbour.Pos) {
                         exists = true
                     }
                 }
@@ -153,6 +308,7 @@ func findNextRegion(game [][]rune) Region {
             }
         }
 
+        region.Plants[i] = p
     }
 
     region.Plants = slices.DeleteFunc(region.Plants, func(p Plant)(bool){
@@ -185,15 +341,17 @@ func main() {
     game := loadGameBoard(scanner)
     
     region := findNextRegion(game)
-    game = removeRegion(game, region)
-    sum := region.Area()*region.Perimeter()
+    sum := region.Area()*region.Sides(game)
 
+    game = removeRegion(game, region)
+
+    region = findNextRegion(game)
     for len(region.Plants) > 0 {
         
-        region = findNextRegion(game)
-        game = removeRegion(game, region)
-        regionCost := region.Area()*region.Perimeter()
+        regionCost := region.Area()*region.Sides(game)
         sum += regionCost
+        game = removeRegion(game, region)
+        region = findNextRegion(game)
 
     }
 
